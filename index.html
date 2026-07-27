@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Button Designer</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Top Toolbar -->
+        <div id="toolbar" class="toolbar"></div>
+
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- Left Canvas Panel -->
+            <div class="canvas-panel">
+                <canvas id="canvas"></canvas>
+            </div>
+
+            <!-- Right Output Panel -->
+            <div class="output-panel">
+                <div class="output-header">output terminal</div>
+                <div id="output" class="output-content"></div>
+                <div class="output-footer">
+                    <button id="save-btn" class="btn">save</button>
+                    <button id="export-btn" class="btn">export</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Module Scripts -->
+    <script src="js/modules/toolbar.js"></script>
+    <script src="js/modules/canvas.js"></script>
+    <script src="js/modules/output.js"></script>
+    <script src="js/modules/storage.js"></script>
+    <script src="js/modules/generator.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
