@@ -10,6 +10,7 @@ let isDrawing = false;
 let startX, startY;
 let history = [];
 let historyStep = -1;
+let drawnShapes = []; // Track all drawn shapes for code generation
 
 // Tool buttons
 const toolButtons = {
@@ -28,7 +29,10 @@ const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
 const clearBtn = document.getElementById('clearCanvas');
 const downloadBtn = document.getElementById('downloadBtn');
+const copyCodeBtn = document.getElementById('copyCodeBtn');
+const downloadCodeBtn = document.getElementById('downloadCodeBtn');
 const colorPicker = document.getElementById('colorPicker');
+const pythonOutput = document.getElementById('pythonOutput');
 
 // Status elements
 const toolStatus = document.getElementById('toolStatus');
@@ -82,6 +86,56 @@ function createRulers() {
     }
 }
 
+// Generate Python code from drawn shapes
+function generatePythonCode() {
+    let code = `import tkinter as tk
+from tkinter import Canvas
+import math
+
+# Initialize window
+root = tk.Tk()
+root.title("Button Shape")
+root.geometry("800x800")
+
+# Create canvas
+canvas = Canvas(root, width=800, height=800, bg='white')
+canvas.pack()
+
+# Draw shapes
+`;
+
+    if (drawnShapes.length === 0) {
+        code += `# No shapes drawn yet\n`;
+    } else {
+        drawnShapes.forEach((shape, index) => {
+            code += `\n# Shape ${index + 1}: ${shape.type}\n`;
+            code += shape.pythonCode;
+        });
+    }
+
+    code += `
+# Display the window
+root.mainloop()
+`;
+
+    return code;
+}
+
+// Convert hex to RGB tuple for Python
+function hexToRgbPython(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (result) {
+        return `(${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)})`;
+    }
+    return '(0, 0, 0)';
+}
+
+// Update Python code display
+function updatePythonCode() {
+    const code = generatePythonCode();
+    pythonOutput.textContent = code;
+}
+
 // Save canvas state to history
 function saveState() {
     historyStep++;
@@ -90,6 +144,7 @@ function saveState() {
     }
     history.push(canvas.toDataURL());
     updateHistoryButtons();
+    updatePythonCode();
 }
 
 // Update undo/redo button states
@@ -127,12 +182,19 @@ function drawLine(fromX, fromY, toX, toY, color = currentColor) {
     ctx.moveTo(fromX, fromY);
     ctx.lineTo(toX, toY);
     ctx.stroke();
+
+    // Store for code generation
+    const pythonCode = `canvas.create_line(${fromX}, ${fromY}, ${toX}, ${toY}, fill='${color}', width=2)\n`;
+    return { type: 'Line', pythonCode, color };
 }
 
 function drawRectangle(fromX, fromY, toX, toY, color = currentColor) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.strokeRect(fromX, fromY, toX - fromX, toY - fromY);
+
+    const pythonCode = `canvas.create_rectangle(${fromX}, ${fromY}, ${toX}, ${toY}, outline='${color}', width=2)\n`;
+    return { type: 'Rectangle', pythonCode, color };
 }
 
 function drawCircle(fromX, fromY, toX, toY, color = currentColor) {
@@ -142,6 +204,9 @@ function drawCircle(fromX, fromY, toX, toY, color = currentColor) {
     ctx.beginPath();
     ctx.arc(fromX, fromY, radius, 0, 2 * Math.PI);
     ctx.stroke();
+
+    const pythonCode = `canvas.create_oval(${fromX - radius}, ${fromY - radius}, ${fromX + radius}, ${fromY + radius}, outline='${color}', width=2)\n`;
+    return { type: 'Circle', pythonCode, color };
 }
 
 function drawRegularPolygon(fromX, fromY, toX, toY, sides, color = currentColor) {
@@ -150,27 +215,34 @@ function drawRegularPolygon(fromX, fromY, toX, toY, sides, color = currentColor)
     ctx.lineWidth = 2;
     ctx.beginPath();
 
+    let points = [];
     for (let i = 0; i < sides; i++) {
         const angle = (i / sides) * 2 * Math.PI - Math.PI / 2;
         const x = fromX + radius * Math.cos(angle);
         const y = fromY + radius * Math.sin(angle);
+        points.push([x, y]);
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     }
     ctx.closePath();
     ctx.stroke();
+
+    // Generate Python code for polygon
+    const flatPoints = points.flat().join(', ');
+    const pythonCode = `canvas.create_polygon(${flatPoints}, outline='${color}', width=2)\n`;
+    return { type: `Polygon(${sides}-sided)`, pythonCode, color };
 }
 
 function drawTriangle(fromX, fromY, toX, toY, color = currentColor) {
-    drawRegularPolygon(fromX, fromY, toX, toY, 3, color);
+    return drawRegularPolygon(fromX, fromY, toX, toY, 3, color);
 }
 
 function drawHexagon(fromX, fromY, toX, toY, color = currentColor) {
-    drawRegularPolygon(fromX, fromY, toX, toY, 6, color);
+    return drawRegularPolygon(fromX, fromY, toX, toY, 6, color);
 }
 
 function drawOctagon(fromX, fromY, toX, toY, color = currentColor) {
-    drawRegularPolygon(fromX, fromY, toX, toY, 8, color);
+    return drawRegularPolygon(fromX, fromY, toX, toY, 8, color);
 }
 
 function eraseArea(x, y, size = 20) {
@@ -279,29 +351,34 @@ canvas.addEventListener('mouseup', (e) => {
         img.onload = () => {
             ctx.drawImage(img, 0, 0);
 
-            // Draw the new shape
+            // Draw the new shape and track it
+            let shapeData = null;
             switch (currentTool) {
                 case 'line':
-                    drawLine(startX, startY, endX, endY);
+                    shapeData = drawLine(startX, startY, endX, endY);
                     break;
                 case 'rect':
-                    drawRectangle(startX, startY, endX, endY);
+                    shapeData = drawRectangle(startX, startY, endX, endY);
                     break;
                 case 'circle':
-                    drawCircle(startX, startY, endX, endY);
+                    shapeData = drawCircle(startX, startY, endX, endY);
                     break;
                 case 'hexagon':
-                    drawHexagon(startX, startY, endX, endY);
+                    shapeData = drawHexagon(startX, startY, endX, endY);
                     break;
                 case 'octagon':
-                    drawOctagon(startX, startY, endX, endY);
+                    shapeData = drawOctagon(startX, startY, endX, endY);
                     break;
                 case 'triangle':
-                    drawTriangle(startX, startY, endX, endY);
+                    shapeData = drawTriangle(startX, startY, endX, endY);
                     break;
                 case 'eraser':
                     eraseArea(endX, endY);
                     break;
+            }
+
+            if (shapeData) {
+                drawnShapes.push(shapeData);
             }
 
             saveState();
@@ -315,12 +392,14 @@ canvas.addEventListener('mouseup', (e) => {
 undoBtn.addEventListener('click', () => {
     if (historyStep > 0) {
         historyStep--;
+        drawnShapes.pop(); // Remove last shape
         const img = new Image();
         img.src = history[historyStep];
         img.onload = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawGrid();
             ctx.drawImage(img, 0, 0);
+            updatePythonCode();
         };
         updateHistoryButtons();
     }
@@ -343,6 +422,7 @@ redoBtn.addEventListener('click', () => {
 clearBtn.addEventListener('click', () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     drawGrid();
+    drawnShapes = [];
     saveState();
 });
 
@@ -353,9 +433,30 @@ downloadBtn.addEventListener('click', () => {
     link.click();
 });
 
+// Copy code button
+copyCodeBtn.addEventListener('click', () => {
+    const code = pythonOutput.textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        copyCodeBtn.textContent = 'Copied! ✓';
+        setTimeout(() => {
+            copyCodeBtn.textContent = 'Copy Code';
+        }, 2000);
+    });
+});
+
+// Download Python code button
+downloadCodeBtn.addEventListener('click', () => {
+    const code = pythonOutput.textContent;
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([code], { type: 'text/plain' }));
+    link.download = 'button_shape.py';
+    link.click();
+});
+
 // Initialize
 drawGrid();
 createRulers();
 saveState();
 updateHistoryButtons();
 toolStatus.textContent = 'None';
+updatePythonCode();
